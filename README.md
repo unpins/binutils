@@ -1,6 +1,6 @@
 # binutils
 
-The [GNU binary utilities](https://www.gnu.org/software/binutils/) — `objdump`, `readelf`, `nm`, `ar`, `strip`, `objcopy`, the `ld` and `ld.gold` linkers, the `as` assembler, `gprof`, and the `dlltool`/`windres` family — in a single self-contained binary that reads every architecture's object files. Built for Linux, macOS and Windows; the exact program set is whatever each platform's binutils can build (see [Build notes](#build-notes)).
+The [GNU binary utilities](https://www.gnu.org/software/binutils/) — `objdump`, `readelf`, `nm`, `ar`, `strip`, `objcopy`, the `ld` and `ld.gold` linkers, the `as` assembler, `gprof`, and the `dlltool`/`windres` family — in a single self-contained binary that reads every architecture's object files. Built natively for Linux, macOS and Windows; the exact program set is whatever each platform's binutils can build (see [Build notes](#build-notes)).
 
 [![CI](https://github.com/unpins/binutils/actions/workflows/binutils.yml/badge.svg)](https://github.com/unpins/binutils/actions)
 ![Linux](https://img.shields.io/badge/Linux-✓-success?logo=linux&logoColor=white)

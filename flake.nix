@@ -1,5 +1,5 @@
 {
-  description = "Standalone build of the GNU binary utilities";
+  description = "the GNU binary utilities as a single self-contained binary";
 
   nixConfig = {
     extra-substituters = [ "https://unpins.cachix.org" ];
