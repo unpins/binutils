@@ -1,3 +1,10 @@
+# WINDOWS-ONLY as of the unpin-llvm engine migration. Linux + macOS now
+# self-fold from bitcode via nix-lib's multicallModuleHookLTO (see flake.nix);
+# this hand-rolled ld-r/objcopy recipe operates on native ELF/COFF objects and
+# archives, which the engine's -flto bitcode path is not, so it is reached only
+# through `windowsBuild` (the mingw cross). The isDarwin/isElf branches below
+# are dead on that path (the mingw stdenv reports isWindows) but kept intact.
+#
 # Upstream binutils ships ~a dozen-and-a-half separate programs spread across
 # several build subdirs that share a stack of static archives (`libbfd.a`,
 # `libopcodes.a`, `libctf.a`, `libsframe.a`, `libiberty.a`, and — ELF only —
