@@ -46,9 +46,9 @@
       # the combined binary. nixpkgs reports the full component list -- pin the
       # effective license so the catalog shows one SPDX id.
       license = "GPL-3.0-or-later";
-      # Bare `binutils --version` routes to the defaultProgram (objdump), whose
-      # banner is `GNU objdump (GNU Binutils) 2.46`.
-      smoke = [ "--version" ];
+      # objdump's banner is `GNU objdump (GNU Binutils) 2.46`. Bare `binutils`
+      # is not a program — it lists.
+      smoke = [ "--unpin-program=objdump" "--version" ];
       smokePattern = "GNU Binutils";
 
       # Build via the unpin-llvm engine and emit a bitcode multicall module. The
@@ -63,7 +63,6 @@
       # (a no-op on the C-only darwin/riscv64 subsets, where gold isn't folded).
       engine = "unpin-llvm";
       multicall = {
-        defaultProgram = "objdump";
         requires.cxx = true;
         programs = [
           { name = "objdump"; }

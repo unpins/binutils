@@ -315,9 +315,9 @@ let
       fi
       echo "=== binutils multicall: $(wc -l < "$mc/applets.list") dispatch names ==="
 
-      # ---- Dispatcher (TSV name\tfn → <fn>_main; bare/renamed → objdump) ----
+      # ---- Dispatcher (TSV name\tfn → <fn>_main; bare/renamed → listing) ----
       cd "$root/binutils"
-${lib.multicallTableDispatcherC { name = "binutils"; defaultApplet = "bu_objdump"; }}
+${lib.multicallTableDispatcherC { name = "binutils"; }}
       $CC -O2 -c -o multicall/dispatcher.o multicall/dispatcher.c
       cd "$root"
 
