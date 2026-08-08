@@ -14,114 +14,33 @@
   # static archives (libbfd/libopcodes/libctf/libsframe/libiberty, and — ELF
   # only — libgold). We fold them into one `argv[0]`-dispatching binary.
   #
-  # Linux + macOS build via the unpin-llvm engine and self-fold from bitcode:
+  # Every target builds via the unpin-llvm engine and self-folds from bitcode:
   # each program compiles to an LLVM-bitcode module, and nix-lib's
   # multicallModuleHookLTO `llvm-link`s them with per-module `opt -internalize`,
   # which privatises the cross-program symbol collisions (objcopy/strip share
   # objcopy.c; ar/ranlib share ar.c; the bucomm/dwarf/elfcomm helpers) that the
   # old hand-rolled ./multicall.nix solved with per-tool `-include` rename
-  # headers. That objcopy/ld-r fold can't run on the engine's -flto bitcode, so
-  # ./multicall.nix is now reserved for the Windows (mingw) path only.
+  # headers.
   #
   # `--enable-targets=all` makes a single objdump/readelf/ld understand every
   # architecture's object files, and turns on the PE/COFF dlltool/windres/windmc/
   # dllwrap on every OS. The applet set is per-OS/arch (all verified against the
-  # shipped v2.46-1 release binaries): most Linux arches fold the full 22 names
-  # (12 inspection + as/ld/gprof + the 4 PE tools + gold/dwp); riscv64 folds 20
-  # (gold has no RISC-V backend, so binutils builds neither gold nor dwp there —
-  # `supportedTarget` on those two entries drops them on that host); macOS folds
+  # shipped v2.46-1 release binaries): most Linux arches fold the full 21 names
+  # (12 inspection + as/ld/gprof + the 4 PE tools + gold/dwp); riscv64 folds 19
+  # (gold has no RISC-V backend, so binutils builds neither gold nor dwp there);
+  # Windows folds the same 19, for the different reason that gold and dwp are
+  # ELF-only by design — `supportedTarget` states both conditions. macOS folds
   # 16 (inspection + the 4 PE tools; GNU ld/as have no Mach-O backend and gprof/
-  # gold/dwp aren't built there, so `darwinPrograms` is that subset). Windows
-  # keeps `programs` (gold/dwp are ELF-only and simply don't build in the mingw
-  # cross, which uses the hand-rolled multicall.nix below, not this fold).
+  # gold/dwp aren't built there, so `darwinPrograms` is that subset).
   outputs = { self, unpins-lib }:
     let
       ulib = unpins-lib.lib;
-    in
-    ulib.mkStandaloneFlake {
-      inherit self;
-      name = "binutils";
-      # The binutils programs, libbfd and libopcodes are all GPL-3.0-or-later;
-      # libiberty (folded in statically) is more permissive but doesn't loosen
-      # the combined binary. nixpkgs reports the full component list -- pin the
-      # effective license so the catalog shows one SPDX id.
-      license = "GPL-3.0-or-later";
-      # objdump's banner is `GNU objdump (GNU Binutils) 2.46`. Bare `binutils`
-      # is not a program — it lists.
-      smoke = [ "--unpin-program=objdump" "--version" ];
-      smokePattern = "GNU Binutils";
 
-      # Build via the unpin-llvm engine and emit a bitcode multicall module. The
-      # engine compiles the ~two-dozen programs binutils builds by default (each a
-      # separate upstream binary) to bitcode; the standalone self-folds them into
-      # one `binutils`. Programs are listed by their LINKED output name (the
-      # capture sidecar keys on the linker's `-o` basename), with the installed
-      # name(s) as argv[0] aliases: nm↠nm-new, strip↠strip-new, c++filt↠cxxfilt,
-      # ld/ld.bfd↠ld-new, as↠as-new, ld.gold↠ld-gold (see the gold rename in
-      # `build`); the PE tools and gprof link under their own name. gold/dwp are
-      # C++ — `requires.cxx` links the fold with $CXX and folds libc++ statically
-      # (a no-op on the C-only darwin/riscv64 subsets, where gold isn't folded).
-      engine = "unpin-llvm";
-      multicall = {
-        requires.cxx = true;
-        programs = [
-          { name = "objdump"; }
-          { name = "nm-new"; aliases = [ "nm" ]; }
-          { name = "readelf"; }
-          { name = "ar"; }
-          { name = "ranlib"; }
-          { name = "strings"; }
-          { name = "size"; }
-          { name = "strip-new"; aliases = [ "strip" ]; }
-          { name = "objcopy"; }
-          { name = "addr2line"; }
-          { name = "cxxfilt"; aliases = [ "c++filt" ]; }
-          { name = "elfedit"; }
-          { name = "ld-new"; aliases = [ "ld" "ld.bfd" ]; }
-          { name = "as-new"; aliases = [ "as" ]; }
-          { name = "gprof"; }
-          # The PE/COFF tools `--enable-targets=all` turns on: link under their own
-          # name (no -new suffix), dispatched under that name.
-          { name = "dlltool"; }
-          { name = "windres"; }
-          { name = "windmc"; }
-          { name = "dllwrap"; }
-          # gold + its dwp companion have no RISC-V backend (gold's configure.tgt
-          # omits riscv; gold is frozen), so binutils' configure builds neither on a
-          # riscv64 host — matching the shipped riscv64 release, which folds the 20
-          # tools above only. `supportedTarget` drops both there (no link sidecar to
-          # fold, no dangling dispatcher entry); they fold on the other five linux
-          # arches. gold/dwp are C++ — `requires.cxx` links the fold with $CXX.
-          { name = "ld-gold"; aliases = [ "ld.gold" ]; supportedTarget = p: !p.isRiscV64; }
-          { name = "dwp"; supportedTarget = p: !p.isRiscV64; }
-        ];
-        # darwin: GNU ld/as have no Mach-O backend, gprof isn't built, and gold/dwp
-        # are ELF-only — binutils' configure builds only the inspection tools + the
-        # PE tools there (verified against the shipped x86_64-darwin release: 16
-        # applets, no as/ld/gprof/gold/dwp). Fold exactly that subset on a darwin
-        # host.
-        darwinPrograms = [
-          { name = "objdump"; }
-          { name = "nm-new"; aliases = [ "nm" ]; }
-          { name = "readelf"; }
-          { name = "ar"; }
-          { name = "ranlib"; }
-          { name = "strings"; }
-          { name = "size"; }
-          { name = "strip-new"; aliases = [ "strip" ]; }
-          { name = "objcopy"; }
-          { name = "addr2line"; }
-          { name = "cxxfilt"; aliases = [ "c++filt" ]; }
-          { name = "elfedit"; }
-          { name = "dlltool"; }
-          { name = "windres"; }
-          { name = "windmc"; }
-          { name = "dllwrap"; }
-        ];
-      };
-
-      build = pkgs:
-        pkgs.pkgsStatic.binutils-unwrapped.overrideAttrs (old: {
+      # Shared by every target. The two engine accommodations below are not
+      # Linux-specific — the mingw cross runs through the same clang adapter now,
+      # so the same two cascades apply there.
+      mkBinutils = scope:
+        scope.binutils-unwrapped.overrideAttrs (old: {
           # One objdump/readelf/ld that groks every architecture's objects.
           # `--disable-dependency-tracking`: binutils' `make install` re-runs
           # ld/genscripts.sh, which regenerates the emulation `.c` files from a
@@ -175,13 +94,103 @@
             fi
           '';
         });
+    in
+    ulib.mkStandaloneFlake {
+      inherit self;
+      name = "binutils";
+      # The binutils programs, libbfd and libopcodes are all GPL-3.0-or-later;
+      # libiberty (folded in statically) is more permissive but doesn't loosen
+      # the combined binary. nixpkgs reports the full component list -- pin the
+      # effective license so the catalog shows one SPDX id.
+      license = "GPL-3.0-or-later";
+      # objdump's banner is `GNU objdump (GNU Binutils) 2.46`. Bare `binutils`
+      # is not a program — it lists.
+      smoke = [ "--unpin-program=objdump" "--version" ];
+      smokePattern = "GNU Binutils";
 
-      # Windows keeps the hand-rolled objcopy/ld-r fold — it runs on native ELF
-      # objects the mingw cross produces, which the engine's bitcode path is not.
-      # Self-adapting applet set: inspection + ld/as/gprof + the four PE tools
-      # (dlltool/windres/windmc/dllwrap); no gold/dwp (ELF-only). See multicall.nix.
-      windowsBuild = pkgs:
-        import ./multicall.nix { lib = pkgs.lib // ulib; }
-          { inherit pkgs; binutils = (ulib.mingwStaticCross pkgs).binutils-unwrapped; };
+      # Build via the unpin-llvm engine and emit a bitcode multicall module. The
+      # engine compiles the ~two-dozen programs binutils builds by default (each a
+      # separate upstream binary) to bitcode; the standalone self-folds them into
+      # one `binutils`. Programs are listed by their LINKED output name (the
+      # capture sidecar keys on the linker's `-o` basename), with the installed
+      # name(s) as argv[0] aliases: nm↠nm-new, strip↠strip-new, c++filt↠cxxfilt,
+      # ld/ld.bfd↠ld-new, as↠as-new, ld.gold↠ld-gold (see the gold rename in
+      # `build`); the PE tools and gprof link under their own name. gold/dwp are
+      # C++ — `requires.cxx` links the fold with $CXX and folds libc++ statically
+      # (a no-op on the C-only darwin/riscv64 subsets, where gold isn't folded).
+      engine = "unpin-llvm";
+      multicall = {
+        windows = true;
+        requires.cxx = true;
+        programs = [
+          { name = "objdump"; }
+          { name = "nm-new"; aliases = [ "nm" ]; }
+          { name = "readelf"; }
+          { name = "ar"; }
+          { name = "ranlib"; }
+          { name = "strings"; }
+          { name = "size"; }
+          { name = "strip-new"; aliases = [ "strip" ]; }
+          { name = "objcopy"; }
+          { name = "addr2line"; }
+          { name = "cxxfilt"; aliases = [ "c++filt" ]; }
+          { name = "elfedit"; }
+          { name = "ld-new"; aliases = [ "ld" "ld.bfd" ]; }
+          { name = "as-new"; aliases = [ "as" ]; }
+          { name = "gprof"; }
+          # The PE/COFF tools `--enable-targets=all` turns on: link under their own
+          # name (no -new suffix), dispatched under that name.
+          { name = "dlltool"; }
+          { name = "windres"; }
+          { name = "windmc"; }
+          { name = "dllwrap"; }
+          # gold + its dwp companion are ELF-only by design, and have no RISC-V
+          # backend either (gold's configure.tgt omits riscv; gold is frozen), so
+          # binutils' configure builds neither on a riscv64 host nor on the mingw
+          # cross — matching the shipped riscv64 release, which folds the 19 tools
+          # above only. `supportedTarget` drops both there (no link sidecar to
+          # fold, no dangling dispatcher entry) and folds them on the other five
+          # linux arches. gold/dwp are C++ — `requires.cxx` links the fold with
+          # $CXX.
+          {
+            name = "ld-gold";
+            aliases = [ "ld.gold" ];
+            supportedTarget = p: (p.isElf or false) && !p.isRiscV64;
+          }
+          { name = "dwp"; supportedTarget = p: (p.isElf or false) && !p.isRiscV64; }
+        ];
+        # darwin: GNU ld/as have no Mach-O backend, gprof isn't built, and gold/dwp
+        # are ELF-only — binutils' configure builds only the inspection tools + the
+        # PE tools there (verified against the shipped x86_64-darwin release: 16
+        # applets, no as/ld/gprof/gold/dwp). Fold exactly that subset on a darwin
+        # host.
+        darwinPrograms = [
+          { name = "objdump"; }
+          { name = "nm-new"; aliases = [ "nm" ]; }
+          { name = "readelf"; }
+          { name = "ar"; }
+          { name = "ranlib"; }
+          { name = "strings"; }
+          { name = "size"; }
+          { name = "strip-new"; aliases = [ "strip" ]; }
+          { name = "objcopy"; }
+          { name = "addr2line"; }
+          { name = "cxxfilt"; aliases = [ "c++filt" ]; }
+          { name = "elfedit"; }
+          { name = "dlltool"; }
+          { name = "windres"; }
+          { name = "windmc"; }
+          { name = "dllwrap"; }
+        ];
+      };
+
+      build = pkgs: mkBinutils pkgs.pkgsStatic;
+
+      # The mingw cross self-folds from bitcode too now. Its applet set is the
+      # 19 that `supportedTarget` leaves after dropping gold/dwp, and it is a
+      # DECLARATION rather than the discovery the hand-rolled fold did: what the
+      # .exe announces is exactly this list, so a program upstream does not build
+      # here would ship an applet the dispatcher cannot reach.
+      windowsBuild = pkgs: mkBinutils (ulib.mingwStaticCross pkgs);
     };
 }
