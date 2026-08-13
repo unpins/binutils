@@ -106,7 +106,12 @@
       # objdump's banner is `GNU objdump (GNU Binutils) 2.46`. Bare `binutils`
       # is not a program — it lists.
       smoke = [ "--unpin-program=objdump" "--version" ];
-      smokePattern = "GNU Binutils";
+      # Anchored on the program, not the suite: every applet prints
+      # `GNU <program> (GNU Binutils) 2.46`, so "GNU Binutils" is satisfied by
+      # nm/ar/ld just as well and never tests the only thing --unpin-program
+      # adds. The banner is a literal in bucomm.c, not argv[0], so this still
+      # matches when smoke_windows runs the artifact renamed to smoke.exe.
+      smokePattern = "^GNU objdump ";
 
       # Build via the unpin-llvm engine and emit a bitcode multicall module. The
       # engine compiles the ~two-dozen programs binutils builds by default (each a

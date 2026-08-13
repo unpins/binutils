@@ -11,11 +11,15 @@ Part of the [unpins](https://unpins.org) catalog; install it with [`unpin`](http
 
 ## Usage
 
-Run it with [unpin](https://github.com/unpins/unpin) — a bare `binutils` runs `objdump`:
+Run one of the programs with [unpin](https://github.com/unpins/unpin):
 
 ```bash
-unpin binutils -d /bin/ls
+unpin binutils --unpin-program=objdump -d /bin/ls
+unpin binutils --unpin-program=readelf -h /bin/ls
 ```
+
+`binutils` is the name of the collection, not of a program, so running it on
+its own lists what is inside instead of picking one for you.
 
 To put every command — `objdump`, `readelf`, `nm`, `ar`, `objcopy`, `strip`, and (where your platform supports them) `ld`, `ld.gold`, `as`, `gprof` and more — onto your PATH:
 
@@ -33,14 +37,16 @@ Each applet's man page is embedded — read one with `unpin man binutils <applet
 
 ```bash
 nix build github:unpins/binutils
-./result/bin/binutils --version
+./result/bin/binutils --unpin-program=objdump --version
 ```
 
 Or run directly:
 
 ```bash
-nix run github:unpins/binutils -- --version
+nix run github:unpins/binutils -- --unpin-program=objdump --version
 ```
+
+A plain `./result/bin/binutils` prints the list of programs it holds.
 
 The first invocation will offer to add the [unpins.cachix.org](https://unpins.cachix.org) substituter so most pulls come pre-built.
 
@@ -62,7 +68,8 @@ The [Releases](https://github.com/unpins/binutils/releases) page has standalone 
   binutils can build is folded in, so it differs by OS:
   - **Linux** — the full toolkit: the inspection/manipulation programs, the `ld`
     (BFD) and `ld.gold` linkers, the `as` assembler, `gprof`, `dwp`, and the PE
-    `dlltool`/`dllwrap`/`windres`/`windmc` tools.
+    `dlltool`/`dllwrap`/`windres`/`windmc` tools. On **RISC-V** the gold linker
+    has no backend, so `ld.gold` and `dwp` are absent there too.
   - **Windows** — the same, **minus `ld.gold`/`dwp`** (the gold linker only
     targets ELF, so binutils' own configure builds it nowhere else).
   - **macOS** — the inspection/manipulation programs plus the PE
