@@ -92,9 +92,11 @@
           # that basename with no collision handling — last writer wins — so the
           # two clobber each other's captured object list. Rename gold's program
           # (automake var prefix `ld_new_` + the `ld-new$(EXEEXT)` program file) to
-          # `ld-gold`; the final binary exposes it under the upstream `ld.gold`
-          # alias. gold is `noinst` and our self-fold replaces its custom install,
-          # so nothing downstream depends on the old name. Patch the committed
+          # `ld-gold`, and let the program's `linkName` carry that spelling so
+          # the applet keeps the upstream name `ld.gold` — a name we invented to
+          # break a tie has no business being announced to the user. gold is
+          # `noinst` and our self-fold replaces its custom install, so nothing
+          # downstream depends on the old name. Patch the committed
           # automake output `gold/Makefile.in` (NOT the generated gold/Makefile):
           # binutils generates the subdir Makefiles during the recursive `make`,
           # after postConfigure runs, so gold/Makefile doesn't exist yet at that
@@ -130,11 +132,15 @@
       # Build via the unpin-llvm engine and emit a bitcode multicall module. The
       # engine compiles the ~two-dozen programs binutils builds by default (each a
       # separate upstream binary) to bitcode; the standalone self-folds them into
-      # one `binutils`. Programs are listed by their LINKED output name (the
-      # capture sidecar keys on the linker's `-o` basename), with the installed
-      # name(s) as argv[0] aliases: nm↠nm-new, strip↠strip-new, c++filt↠cxxfilt,
-      # ld/ld.bfd↠ld-new, as↠as-new, ld.gold↠ld-gold (see the gold rename in
-      # `build`); the PE tools and gprof link under their own name. gold/dwp are
+      # one `binutils`. Programs are listed under the name they INSTALL as, with
+      # `linkName` carrying the linker's `-o` basename where upstream spells it
+      # differently — nm←nm-new, strip←strip-new, c++filt←cxxfilt, ld←ld-new,
+      # as←as-new, ld.gold←ld-gold (see the gold rename in `build`). Those six
+      # used to be listed the other way round, because the capture sidecar is
+      # keyed on the linked name and `name` was the only place to say it; that
+      # also made `nm-new` an ANNOUNCED name, so `unpin install binutils` linked
+      # a `nm-new` slot for a program that exists only inside the build tree.
+      # The PE tools and gprof link under their own name. gold/dwp are
       # C++ — `requires.cxx` links the fold with $CXX and folds libc++ statically
       # (a no-op on the C-only darwin/riscv64 subsets, where gold isn't folded).
       engine = "unpin-llvm";
@@ -143,19 +149,19 @@
         requires.cxx = true;
         programs = [
           { name = "objdump"; }
-          { name = "nm-new"; aliases = [ "nm" ]; }
+          { name = "nm"; linkName = "nm-new"; }
           { name = "readelf"; }
           { name = "ar"; }
           { name = "ranlib"; }
           { name = "strings"; }
           { name = "size"; }
-          { name = "strip-new"; aliases = [ "strip" ]; }
+          { name = "strip"; linkName = "strip-new"; }
           { name = "objcopy"; }
           { name = "addr2line"; }
-          { name = "cxxfilt"; aliases = [ "c++filt" ]; }
+          { name = "c++filt"; linkName = "cxxfilt"; }
           { name = "elfedit"; }
-          { name = "ld-new"; aliases = [ "ld" "ld.bfd" ]; }
-          { name = "as-new"; aliases = [ "as" ]; }
+          { name = "ld"; linkName = "ld-new"; aliases = [ "ld.bfd" ]; }
+          { name = "as"; linkName = "as-new"; }
           { name = "gprof"; }
           # The PE/COFF tools `--enable-targets=all` turns on: link under their own
           # name (no -new suffix), dispatched under that name.
@@ -172,8 +178,8 @@
           # linux arches. gold/dwp are C++ — `requires.cxx` links the fold with
           # $CXX.
           {
-            name = "ld-gold";
-            aliases = [ "ld.gold" ];
+            name = "ld.gold";
+            linkName = "ld-gold";
             supportedTarget = p: (p.isElf or false) && !p.isRiscV64;
           }
           { name = "dwp"; supportedTarget = p: (p.isElf or false) && !p.isRiscV64; }
@@ -185,16 +191,16 @@
         # host.
         darwinPrograms = [
           { name = "objdump"; }
-          { name = "nm-new"; aliases = [ "nm" ]; }
+          { name = "nm"; linkName = "nm-new"; }
           { name = "readelf"; }
           { name = "ar"; }
           { name = "ranlib"; }
           { name = "strings"; }
           { name = "size"; }
-          { name = "strip-new"; aliases = [ "strip" ]; }
+          { name = "strip"; linkName = "strip-new"; }
           { name = "objcopy"; }
           { name = "addr2line"; }
-          { name = "cxxfilt"; aliases = [ "c++filt" ]; }
+          { name = "c++filt"; linkName = "cxxfilt"; }
           { name = "elfedit"; }
           { name = "dlltool"; }
           { name = "windres"; }
