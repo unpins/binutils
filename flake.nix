@@ -51,10 +51,24 @@
           # build once, so drop autotools dependency tracking entirely — genscripts
           # then uses the clean configure-provided emulation list (and the build
           # runs faster with no .deps churn).
+          #
+          # `--program-prefix=`: nixpkgs forces `--program-prefix=${targetPrefix}`,
+          # and in a cross set `targetPlatform != hostPlatform` compares two
+          # SEPARATELY elaborated platform attrsets — unequal even when both spell
+          # `x86_64-w64-mingw32` — so the mingw build installs everything as
+          # `x86_64-w64-mingw32-*`. The binaries don't matter (the self-fold links
+          # from the build tree's `-o` names, not the installed ones), but the man
+          # pages do: the .exe shipped `x86_64-w64-mingw32-objdump.1` while
+          # announcing `objdump`, so NOT ONE of its 25 names resolved. We ship one
+          # `binutils` binary, not a cross toolchain — the prefix has no meaning
+          # here. Last `--program-prefix` on the command line wins. Only where the
+          # prefix is non-empty: native already resolves to `--program-prefix=`,
+          # so adding a second copy there would re-hash eight green targets to
+          # say the same thing.
           configureFlags = (old.configureFlags or [ ]) ++ [
             "--enable-targets=all"
             "--disable-dependency-tracking"
-          ];
+          ] ++ scope.lib.optional (scope.stdenv.hostPlatform.isWindows) "--program-prefix=";
           # nixpkgs' binutils bakes `-static-libgcc` (a link flag) into
           # NIX_CFLAGS_COMPILE, so it rides every clang invocation — including the
           # `clang -E` preprocessor calls binutils' many sub-configures use for
