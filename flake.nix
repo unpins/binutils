@@ -160,7 +160,13 @@
           { name = "addr2line"; }
           { name = "c++filt"; linkName = "cxxfilt"; }
           { name = "elfedit"; }
-          { name = "ld"; linkName = "ld-new"; aliases = [ "ld.bfd" ]; }
+          # binutils-2.46 documents neither `ld.bfd` nor gold/dwp/dllwrap:
+          # `binutils/doc` holds 14 `.1` plus `cxxfilt.man`, and
+          # `ld/Makefile.am` says `man_MANS = ld.1` — one page for a linker
+          # `install-exec-local` installs under two names, by design. All four
+          # names run; none has a page anywhere, so a stub would be invention.
+          { name = "ld"; linkName = "ld-new";
+            aliases = [ { name = "ld.bfd"; noMan = true; } ]; }
           { name = "as"; linkName = "as-new"; }
           { name = "gprof"; }
           # The PE/COFF tools `--enable-targets=all` turns on: link under their own
@@ -168,7 +174,7 @@
           { name = "dlltool"; }
           { name = "windres"; }
           { name = "windmc"; }
-          { name = "dllwrap"; }
+          { name = "dllwrap"; noMan = true; }
           # gold + its dwp companion are ELF-only by design, and have no RISC-V
           # backend either (gold's configure.tgt omits riscv; gold is frozen), so
           # binutils' configure builds neither on a riscv64 host nor on the mingw
@@ -180,9 +186,10 @@
           {
             name = "ld.gold";
             linkName = "ld-gold";
+            noMan = true;
             supportedTarget = p: (p.isElf or false) && !p.isRiscV64;
           }
-          { name = "dwp"; supportedTarget = p: (p.isElf or false) && !p.isRiscV64; }
+          { name = "dwp"; noMan = true; supportedTarget = p: (p.isElf or false) && !p.isRiscV64; }
         ];
         # darwin: GNU ld/as have no Mach-O backend, gprof isn't built, and gold/dwp
         # are ELF-only — binutils' configure builds only the inspection tools + the
@@ -205,7 +212,7 @@
           { name = "dlltool"; }
           { name = "windres"; }
           { name = "windmc"; }
-          { name = "dllwrap"; }
+          { name = "dllwrap"; noMan = true; }
         ];
       };
 
