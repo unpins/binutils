@@ -41,6 +41,7 @@
       # so the same two cascades apply there.
       mkBinutils = scope:
         scope.binutils-unwrapped.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [ ./patches/windres-res-coff-info.patch ];
           # One objdump/readelf/ld that groks every architecture's objects.
           # `--disable-dependency-tracking`: binutils' `make install` re-runs
           # ld/genscripts.sh, which regenerates the emulation `.c` files from a
@@ -175,6 +176,9 @@
           { name = "windres"; }
           { name = "windmc"; }
           { name = "dllwrap"; noMan = true; }
+          { name = "coffdump"; noMan = true; }
+          { name = "srconv"; noMan = true; }
+          { name = "sysdump"; noMan = true; }
           # gold + its dwp companion are ELF-only by design, and have no RISC-V
           # backend either (gold's configure.tgt omits riscv; gold is frozen), so
           # binutils' configure builds neither on a riscv64 host nor on the mingw
@@ -213,6 +217,9 @@
           { name = "windres"; }
           { name = "windmc"; }
           { name = "dllwrap"; noMan = true; }
+          { name = "coffdump"; noMan = true; }
+          { name = "srconv"; noMan = true; }
+          { name = "sysdump"; noMan = true; }
         ];
       };
 

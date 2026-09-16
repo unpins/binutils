@@ -1,0 +1,12 @@
+--- a/binutils/resres.c	2026-09-15 18:42:34.823772861 -0300
++++ b/binutils/resres.c	2026-09-15 18:42:34.847771914 -0300
+@@ -216,6 +216,9 @@
+   /* Convert binary data to resource */
+   r = bin_to_res (wrbfd, type, buff, reshdr.data_size);
+   r->res_info = resinfo;
++  /* bin_to_res leaves coff_info to the caller; rescoff.c writes it into
++     every COFF resource data entry.  */
++  memset (&r->coff_info, 0, sizeof (r->coff_info));
+   /* Add resource to resource directory */
+   res_add_resource (r, &type, &name, resinfo.language, 0);
+ 

@@ -76,6 +76,8 @@ The [Releases](https://github.com/unpins/binutils/releases) page has standalone 
     `dlltool`/`dllwrap`/`windres`/`windmc` tools. GNU `ld`, `as`, `gprof` and
     `gold` have no Mach-O backend, so binutils' configure drops them on Darwin;
     the inspection programs still read every architecture (incl. Mach-O).
+  - Every platform also has `coffdump`, `srconv` and `sysdump`, for COFF debug
+    information and the SYSROFF object format.
 - `ld.gold`/`dwp` (Linux) are C++; their runtime is folded in statically. On
   macOS `windres`/`windmc` need `iconv`, which lives in `libiconv` rather than
   `libSystem`, so `libiconv.a` is folded in statically — the binary stays
