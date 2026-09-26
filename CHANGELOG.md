@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [2.46-2] - 2026-09-26
+
 ### Added
 
 - `coffdump`, `srconv` and `sysdump`. binutils builds them on every platform,
