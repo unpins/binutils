@@ -68,12 +68,12 @@ The [Releases](https://github.com/unpins/binutils/releases) page has standalone 
   binutils can build is folded in, so it differs by OS:
   - **Linux** — the full toolkit: the inspection/manipulation programs, the `ld`
     (BFD) and `ld.gold` linkers, the `as` assembler, `gprof`, `dwp`, and the PE
-    `dlltool`/`dllwrap`/`windres`/`windmc` tools. On **RISC-V** the gold linker
+    `dlltool`/`dllwrap`/`windres`/`windmc` programs. On **RISC-V** the gold linker
     has no backend, so `ld.gold` and `dwp` are absent there too.
   - **Windows** — the same, **minus `ld.gold`/`dwp`** (the gold linker only
     targets ELF, so binutils' own configure builds it nowhere else).
   - **macOS** — the inspection/manipulation programs plus the PE
-    `dlltool`/`dllwrap`/`windres`/`windmc` tools. GNU `ld`, `as`, `gprof` and
+    `dlltool`/`dllwrap`/`windres`/`windmc` programs. GNU `ld`, `as`, `gprof` and
     `gold` have no Mach-O backend, so binutils' configure drops them on Darwin;
     the inspection programs still read every architecture (incl. Mach-O).
   - Every platform also has `coffdump`, `srconv` and `sysdump`, for COFF debug
