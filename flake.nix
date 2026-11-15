@@ -41,7 +41,10 @@
       # so the same two cascades apply there.
       mkBinutils = scope:
         scope.binutils-unwrapped.overrideAttrs (old: {
-          patches = (old.patches or [ ]) ++ [ ./patches/windres-res-coff-info.patch ];
+          patches = (old.patches or [ ]) ++ [
+            ./patches/windres-res-coff-info.patch
+            ./patches/gold-ld-new-rename.patch
+          ];
           # One objdump/readelf/ld that groks every architecture's objects.
           # `--disable-dependency-tracking`: binutils' `make install` re-runs
           # ld/genscripts.sh, which regenerates the emulation `.c` files from a
@@ -87,29 +90,6 @@
           env = (old.env or { }) // {
             NIX_CFLAGS_COMPILE = ((old.env or { }).NIX_CFLAGS_COMPILE or "") + " -Qunused-arguments";
           };
-          # Disambiguate gold's build output. gold and the BFD linker BOTH link a
-          # program whose `-o` basename is `ld-new` (ld/ from bin_PROGRAMS, gold/
-          # from noinst_PROGRAMS). The engine's link-capture sidecar is keyed by
-          # that basename with no collision handling — last writer wins — so the
-          # two clobber each other's captured object list. Rename gold's program
-          # (automake var prefix `ld_new_` + the `ld-new$(EXEEXT)` program file) to
-          # `ld-gold`, and let the program's `linkName` carry that spelling so
-          # the applet keeps the upstream name `ld.gold` — a name we invented to
-          # break a tie has no business being announced to the user. gold is
-          # `noinst` and our self-fold replaces its custom install, so nothing
-          # downstream depends on the old name. Patch the committed
-          # automake output `gold/Makefile.in` (NOT the generated gold/Makefile):
-          # binutils generates the subdir Makefiles during the recursive `make`,
-          # after postConfigure runs, so gold/Makefile doesn't exist yet at that
-          # point — config.status stamps it out from this .in during the build.
-          # The bootstrap refs to the top-level BFD `$(abs_top_builddir)/ld-new`
-          # carry no `$(EXEEXT)` and aren't matched (and aren't built anyway).
-          postPatch = (old.postPatch or "") + ''
-            if [ -f gold/Makefile.in ]; then
-              sed -i -e 's/ld_new/ld_gold/g' \
-                     -e 's/ld-new$(EXEEXT)/ld-gold$(EXEEXT)/g' gold/Makefile.in
-            fi
-          '';
         });
     in
     ulib.mkStandaloneFlake {
@@ -136,7 +116,7 @@
       # one `binutils`. Programs are listed under the name they INSTALL as, with
       # `linkName` carrying the linker's `-o` basename where upstream spells it
       # differently — nm←nm-new, strip←strip-new, c++filt←cxxfilt, ld←ld-new,
-      # as←as-new, ld.gold←ld-gold (see the gold rename in `build`). Those six
+      # as←as-new, ld.gold←ld-gold (patches/gold-ld-new-rename.patch). Those six
       # used to be listed the other way round, because the capture sidecar is
       # keyed on the linked name and `name` was the only place to say it; that
       # also made `nm-new` an ANNOUNCED name, so `unpin install binutils` linked
