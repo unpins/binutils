@@ -1,3 +1,12 @@
+windres: zero coff_info on resources read from a .res file.
+
+bin_to_res() leaves the resource's coff_info for the caller to fill, and the
+.res reader read_resource_entry() never does, while rescoff.c writes
+coff_info.codepage and coff_info.reserved into every COFF resource data
+entry. So `windres` turning a .res into a COFF object emits 8 bytes of
+uninitialized heap per resource: the output is not deterministic. Not
+platform-specific; affects every host.
+
 --- a/binutils/resres.c	2026-09-15 18:42:34.823772861 -0300
 +++ b/binutils/resres.c	2026-09-15 18:42:34.847771914 -0300
 @@ -216,6 +216,9 @@
