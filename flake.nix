@@ -36,6 +36,9 @@
     let
       ulib = unpins-lib.lib;
 
+      # nixpkgs' binutils `withGold`: gold has no RISC-V or LoongArch backend.
+      withGold = p: (p.isElf or false) && !(p.isRiscV or false) && !(p.isLoongArch64 or false);
+
       # Shared by every target. The two engine accommodations below are not
       # Linux-specific — the mingw cross runs through the same clang adapter now,
       # so the same two cascades apply there.
@@ -171,9 +174,9 @@
             name = "ld.gold";
             linkName = "ld-gold";
             noMan = true;
-            supportedTarget = p: (p.isElf or false) && !p.isRiscV64;
+            supportedTarget = withGold;
           }
-          { name = "dwp"; noMan = true; supportedTarget = p: (p.isElf or false) && !p.isRiscV64; }
+          { name = "dwp"; noMan = true; supportedTarget = withGold; }
         ];
         # darwin: GNU ld/as have no Mach-O backend, gprof isn't built, and gold/dwp
         # are ELF-only — binutils' configure builds only the inspection tools + the
