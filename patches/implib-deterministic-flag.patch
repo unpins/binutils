@@ -1,0 +1,18 @@
+ld --out-implib failed on every ELF link ("failed to generate import library",
+"final link failed: invalid operation"). nixpkgs' deterministic.patch sets
+BFD_DETERMINISTIC_OUTPUT on the output bfd; elf_output_implib copies the
+output's flags to the import library, and bfd_set_file_flags rejects that
+flag as not applicable to an ELF object. Leave it off the import library.
+Found by ld's own testsuite (ld-elf "Generate import library").
+
+--- a/bfd/elflink.c
++++ b/bfd/elflink.c
+@@ -12521,7 +12521,7 @@
+ 
+   /* Use flag from executable but make it a relocatable object.  */
+   flags = bfd_get_file_flags (abfd);
+-  flags &= ~HAS_RELOC;
++  flags &= ~(HAS_RELOC | BFD_DETERMINISTIC_OUTPUT);
+   if (!bfd_set_start_address (implib_bfd, 0)
+       || !bfd_set_file_flags (implib_bfd, flags & ~EXEC_P))
+     return false;

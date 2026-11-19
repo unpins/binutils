@@ -8,30 +8,14 @@
 
   inputs.unpins-lib.url = "github:unpins/nix-lib";
 
-  # binutils ships ~a dozen-and-a-half programs across several build subdirs
-  # (objdump/readelf/nm/ar/…, the `ld` linker, the `as` assembler, gprof, the
-  # gold linker + dwp, the PE dlltool/windres family) that share a stack of
-  # static archives (libbfd/libopcodes/libctf/libsframe/libiberty, and — ELF
-  # only — libgold). We fold them into one `argv[0]`-dispatching binary.
+  # binutils' programs share libbfd/libopcodes/libctf/libsframe/libiberty
+  # (and, on ELF, gold's own code); the engine folds them into one binary.
   #
-  # Every target builds via the unpin-llvm engine and self-folds from bitcode:
-  # each program compiles to an LLVM-bitcode module, and nix-lib's
-  # multicallModuleHookLTO `llvm-link`s them with per-module `opt -internalize`,
-  # which privatises the cross-program symbol collisions (objcopy/strip share
-  # objcopy.c; ar/ranlib share ar.c; the bucomm/dwarf/elfcomm helpers) that the
-  # old hand-rolled ./multicall.nix solved with per-tool `-include` rename
-  # headers.
-  #
-  # `--enable-targets=all` makes a single objdump/readelf/ld understand every
-  # architecture's object files, and turns on the PE/COFF dlltool/windres/windmc/
-  # dllwrap on every OS. The applet set is per-OS/arch (all verified against the
-  # shipped v2.46-1 release binaries): most Linux arches fold the full 21 names
-  # (12 inspection + as/ld/gprof + the 4 PE tools + gold/dwp); riscv64 folds 19
-  # (gold has no RISC-V backend, so binutils builds neither gold nor dwp there);
-  # Windows folds the same 19, for the different reason that gold and dwp are
-  # ELF-only by design — `supportedTarget` states both conditions. macOS folds
-  # 16 (inspection + the 4 PE tools; GNU ld/as have no Mach-O backend and gprof/
-  # gold/dwp aren't built there, so `darwinPrograms` is that subset).
+  # `--enable-targets=all` makes one objdump/readelf/ld read every
+  # architecture's objects and builds the PE/COFF tools on every OS. Programs
+  # per target: 24 (25 names with `ld.bfd`) on most Linux arches; 22 on
+  # riscv64, loongarch64 and Windows, which have no gold or dwp (`withGold`);
+  # 19 on macOS, where GNU ld/as have no Mach-O backend and gprof isn't built.
   outputs = { self, unpins-lib }:
     let
       ulib = unpins-lib.lib;
@@ -39,14 +23,13 @@
       # nixpkgs' binutils `withGold`: gold has no RISC-V or LoongArch backend.
       withGold = p: (p.isElf or false) && !(p.isRiscV or false) && !(p.isLoongArch64 or false);
 
-      # Shared by every target. The two engine accommodations below are not
-      # Linux-specific — the mingw cross runs through the same clang adapter now,
-      # so the same two cascades apply there.
+      # Shared by every target, the mingw cross included.
       mkBinutils = scope:
         scope.binutils-unwrapped.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [
             ./patches/windres-res-coff-info.patch
             ./patches/gold-ld-new-rename.patch
+            ./patches/implib-deterministic-flag.patch
           ];
           # One objdump/readelf/ld that groks every architecture's objects.
           # `--disable-dependency-tracking`: binutils' `make install` re-runs
@@ -75,7 +58,31 @@
           configureFlags = (old.configureFlags or [ ]) ++ [
             "--enable-targets=all"
             "--disable-dependency-tracking"
-          ] ++ scope.lib.optional (scope.stdenv.hostPlatform.isWindows) "--program-prefix=";
+          ] ++ (if scope.stdenv.hostPlatform.isWindows then [ "--program-prefix=" ] else [
+            # Where objdump and readelf look for separate debug files: the
+            # system's directory, not this package's store path.
+            "--with-separate-debug-dir=/usr/lib/debug"
+          ]);
+          # The suite compiles its test programs with CC_FOR_TARGET; the
+          # engine's cc emits bitcode objects that strip/objdump/ld can't read,
+          # so the tests get the build host's ordinary compiler, which only
+          # targets the host when the systems match (not i686) and isn't
+          # measured on darwin. gold is left out: its testsuite builds its
+          # objects with the build's own compiler and wants `ld-new`, which
+          # patches/gold-ld-new-rename.patch renames.
+          doCheck = scope.stdenv.hostPlatform.isLinux
+            && scope.stdenv.buildPlatform.system == scope.stdenv.hostPlatform.system;
+          checkTarget = scope.lib.concatMapStringsSep " " (d: "check-${d}") [
+            "binutils" "gas" "ld" "libctf" "libsframe" "libiberty" "bfd" "opcodes" "gprof"
+          ];
+          # The ar testsuite checks `ar u` against real member mtimes, which
+          # SOURCE_DATE_EPOCH (set by the build) pins.
+          preCheck = (old.preCheck or "") + "\nunset SOURCE_DATE_EPOCH\n";
+          checkFlags = [
+            "CC_FOR_TARGET=${scope.buildPackages.stdenv.cc}/bin/cc"
+            "CXX_FOR_TARGET=${scope.buildPackages.stdenv.cc}/bin/c++"
+          ];
+          nativeCheckInputs = (old.nativeCheckInputs or [ ]) ++ [ scope.dejagnu ];
           # nixpkgs' binutils bakes `-static-libgcc` (a link flag) into
           # NIX_CFLAGS_COMPILE, so it rides every clang invocation — including the
           # `clang -E` preprocessor calls binutils' many sub-configures use for
@@ -88,10 +95,15 @@
           # silently, clang doesn't. `-Qunused-arguments` silences the unused-arg
           # warning so the probes see clean stderr and the headers detect
           # correctly (this cascade broke every subdir's config.h, not just
-          # libiberty's). binutils-unwrapped uses structuredAttrs, so
-          # NIX_CFLAGS_COMPILE lives in `env`.
+          # libiberty's). binutils-unwrapped sets NIX_CFLAGS_COMPILE in `env`,
+          # so append there.
           env = (old.env or { }) // {
             NIX_CFLAGS_COMPILE = ((old.env or { }).NIX_CFLAGS_COMPILE or "") + " -Qunused-arguments";
+          } // scope.lib.optionalAttrs (!scope.stdenv.hostPlatform.isWindows) {
+            # musl's host differs from the gnu build, so autoconf can't run its
+            # mmap probe and guesses no: elfedit then loses --enable-x86-feature
+            # and bfd reads files without mmap.
+            ac_cv_func_mmap_fixed_mapped = "yes";
           };
         });
     in
@@ -113,20 +125,10 @@
       # matches when smoke_windows runs the artifact renamed to smoke.exe.
       smokePattern = "^GNU objdump ";
 
-      # Build via the unpin-llvm engine and emit a bitcode multicall module. The
-      # engine compiles the ~two-dozen programs binutils builds by default (each a
-      # separate upstream binary) to bitcode; the standalone self-folds them into
-      # one `binutils`. Programs are listed under the name they INSTALL as, with
-      # `linkName` carrying the linker's `-o` basename where upstream spells it
-      # differently — nm←nm-new, strip←strip-new, c++filt←cxxfilt, ld←ld-new,
-      # as←as-new, ld.gold←ld-gold (patches/gold-ld-new-rename.patch). Those six
-      # used to be listed the other way round, because the capture sidecar is
-      # keyed on the linked name and `name` was the only place to say it; that
-      # also made `nm-new` an ANNOUNCED name, so `unpin install binutils` linked
-      # a `nm-new` slot for a program that exists only inside the build tree.
-      # The PE tools and gprof link under their own name. gold/dwp are
-      # C++ — `requires.cxx` links the fold with $CXX and folds libc++ statically
-      # (a no-op on the C-only darwin/riscv64 subsets, where gold isn't folded).
+      # Programs are listed under the name they install as; `linkName` is the
+      # build's `-o` name where it differs (nm-new, strip-new, cxxfilt, ld-new,
+      # as-new, ld-gold — the last set by patches/gold-ld-new-rename.patch).
+      # gold and dwp are C++, hence `requires.cxx`.
       engine = "unpin-llvm";
       multicall = {
         windows = true;
@@ -162,14 +164,7 @@
           { name = "coffdump"; noMan = true; }
           { name = "srconv"; noMan = true; }
           { name = "sysdump"; noMan = true; }
-          # gold + its dwp companion are ELF-only by design, and have no RISC-V
-          # backend either (gold's configure.tgt omits riscv; gold is frozen), so
-          # binutils' configure builds neither on a riscv64 host nor on the mingw
-          # cross — matching the shipped riscv64 release, which folds the 19 tools
-          # above only. `supportedTarget` drops both there (no link sidecar to
-          # fold, no dangling dispatcher entry) and folds them on the other five
-          # linux arches. gold/dwp are C++ — `requires.cxx` links the fold with
-          # $CXX.
+          # gold and dwp: ELF only, and no RISC-V or LoongArch backend.
           {
             name = "ld.gold";
             linkName = "ld-gold";
@@ -178,11 +173,8 @@
           }
           { name = "dwp"; noMan = true; supportedTarget = withGold; }
         ];
-        # darwin: GNU ld/as have no Mach-O backend, gprof isn't built, and gold/dwp
-        # are ELF-only — binutils' configure builds only the inspection tools + the
-        # PE tools there (verified against the shipped x86_64-darwin release: 16
-        # applets, no as/ld/gprof/gold/dwp). Fold exactly that subset on a darwin
-        # host.
+        # darwin: GNU ld/as have no Mach-O backend, gprof isn't built and
+        # gold/dwp are ELF-only, so configure builds only these.
         darwinPrograms = [
           { name = "objdump"; }
           { name = "nm"; linkName = "nm-new"; }
@@ -208,11 +200,7 @@
 
       build = pkgs: mkBinutils pkgs.pkgsStatic;
 
-      # The mingw cross self-folds from bitcode too now. Its applet set is the
-      # 19 that `supportedTarget` leaves after dropping gold/dwp, and it is a
-      # DECLARATION rather than the discovery the hand-rolled fold did: what the
-      # .exe announces is exactly this list, so a program upstream does not build
-      # here would ship an applet the dispatcher cannot reach.
+      # Windows folds the list above minus gold and dwp.
       windowsBuild = pkgs: mkBinutils (ulib.mingwStaticCross pkgs);
     };
 }

@@ -1,6 +1,6 @@
 # binutils
 
-The [GNU binary utilities](https://www.gnu.org/software/binutils/) — `objdump`, `readelf`, `nm`, `ar`, `strip`, `objcopy`, the `ld` and `ld.gold` linkers, the `as` assembler, `gprof`, and the `dlltool`/`windres` family — in a single self-contained binary that reads every architecture's object files. Built natively for Linux, macOS and Windows; the exact program set is whatever each platform's binutils can build (see [Build notes](#build-notes)).
+The [GNU Binutils](https://www.gnu.org/software/binutils/) programs — `objdump`, `readelf`, `nm`, `ar`, `strip`, `objcopy`, the `ld` and `ld.gold` linkers, the `as` assembler, `gprof`, and the `dlltool`/`windres` family — in a single self-contained binary that reads every architecture's object files. Built natively for Linux, macOS and Windows; the exact program set is whatever each platform's binutils can build (see [Build notes](#build-notes)).
 
 [![CI](https://github.com/unpins/binutils/actions/workflows/binutils.yml/badge.svg)](https://github.com/unpins/binutils/actions)
 ![Linux](https://img.shields.io/badge/Linux-✓-success?logo=linux&logoColor=white)
@@ -31,7 +31,7 @@ unpin install binutils
 
 ## Man pages
 
-Each applet's man page is embedded — read one with `unpin man binutils <applet>`, e.g. `unpin man binutils objdump`.
+The man pages upstream ships are embedded — read one with `unpin man binutils <program>`, e.g. `unpin man binutils objdump`; `ld.bfd` shares the `ld` page, and `dllwrap`, `coffdump`, `srconv`, `sysdump`, `ld.gold` and `dwp` have none upstream.
 
 ## Build locally
 
@@ -82,6 +82,17 @@ The [Releases](https://github.com/unpins/binutils/releases) page has standalone 
   macOS `windres`/`windmc` need `iconv`, which lives in `libiconv` rather than
   `libSystem`, so `libiconv.a` is folded in statically — the binary stays
   `libSystem`-only with no companion libraries.
-- `c++filt` is present and runs as `binutils c++filt …`, but the `+` characters
-  are outside the command-name charset, so it isn't recreated as a standalone
-  PATH command at `unpin install`.
+- Compressed debug sections work with zlib but not zstd
+  (`--compress-debug-sections=zstd` fails): nixpkgs builds binutils without
+  zstd.
+- `ld` and `ld.gold` have no default library directories — pass `-L` or run
+  them through a compiler driver — and messages are in English only. Both come
+  from nixpkgs' build of binutils, which this one keeps.
+- `gprofng` is not included: it has no musl port yet
+  ([PR29477](https://sourceware.org/PR29477)), and nixpkgs disables it too.
+- Linker plugins don't load (`ld --plugin …` fails with "Dynamic loading not
+  supported"): the binary is static. Link GCC LTO objects with
+  `-fno-use-linker-plugin`, or with the toolchain's own `ld`.
+- **Tests:** the upstream suites for binutils, gas, ld, libctf, libsframe,
+  libiberty, bfd, opcodes and gprof run on native Linux builds (0 failures
+  under static-musl). Cross targets and macOS skip them.
